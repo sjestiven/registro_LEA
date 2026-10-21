@@ -163,7 +163,7 @@ def load_data() -> pd.DataFrame:
 
     if not data_path.exists():
         st.error(
-            "No se encontro el archivo de datos. Ejecuta el pipeline para generar "
+            "No se encontro el archivo de demostracion. Agrega datos sinteticos a "
             "data/public/registro_consolidado.csv."
         )
         st.stop()
@@ -426,6 +426,11 @@ st.markdown(
 )
 
 
+st.warning(
+    "MODO DEMOSTRACIÓN: este panel utiliza datos completamente sintéticos. "
+    "Las cifras, usuarios y tendencias no corresponden a registros reales del LEA."
+)
+
 df_raw = load_data()
 df = apply_filters(df_raw)
 
@@ -457,7 +462,7 @@ with page_exec:
     with kpi_cols[0]:
         metric_card("Visitas totales", format_int(len(df)), "Registros de asistencia", "#276EF1")
     with kpi_cols[1]:
-        metric_card("Usuarios únicos", format_int(usuarios_unicos), "Estudiantes anonimizados", "#00A6A6")
+        metric_card("Usuarios únicos", format_int(usuarios_unicos), "Identificadores simulados", "#00A6A6")
     with kpi_cols[2]:
         metric_card("Visitas por usuario", f"{visitas_por_usuario:.1f}", "Recurrencia promedio", "#4C956C")
     with kpi_cols[3]:
