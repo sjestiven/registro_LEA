@@ -7,7 +7,7 @@ Pontificia Universidad Javeriana Cali · Proyecto aplicado (2026)
 
 El LEA registra la participación de estudiantes en monitorías y otras actividades mediante formularios de Microsoft Forms. Los archivos Excel exportados corresponden a diferentes semestres y presentan variaciones en los nombres de programas, cursos, actividades y personal responsable.
 
-El proyecto **lee y une los Excel semestrales**, aplica reglas de limpieza y homologación, crea identificadores seudonimizados y genera un CSV consolidado que puede consultarse mediante una aplicación en Streamlit.
+El proyecto **lee y une los Excel semestrales**, aplica reglas de limpieza y homologación, crea identificadores seudonimizados y genera un CSV consolidado local. La aplicación pública utiliza un CSV independiente con **datos sintéticos**, no registros reales del LEA.
 
 El objetivo es facilitar el análisis histórico de los servicios del laboratorio. **No reemplaza Microsoft Forms ni realiza el registro de asistencia en tiempo real.**
 
@@ -49,8 +49,9 @@ registro_LEA/
 │   └── config.toml
 ├── data/
 │   ├── raw/                          # Excel de origen; excluido de Git
+│   ├── processed/                    # Salida real local; excluida de Git
 │   └── public/
-│       └── registro_consolidado.csv  # Datos que consume la aplicación
+│       └── registro_consolidado.csv  # Datos sintéticos de demostración
 ├── src/
 │   ├── ingestion/
 │   │   └── load_data.py
@@ -123,9 +124,9 @@ python -m pip install -r requirements.txt
 python src/pipeline/main.py
 ```
 
-El programa lee los archivos, consolida los registros y genera o actualiza `data/public/registro_consolidado.csv`. También puede crear `logs.log` con información sobre la ejecución y valores que requieren revisión.
+El programa lee los archivos, consolida los registros y genera o actualiza **localmente** `data/processed/registro_consolidado.csv`. También puede crear `logs.log` con información sobre la ejecución y valores que requieren revisión.
 
-**Advertencia:** el destino actual es la carpeta `data/public/`. Antes de ejecutar el pipeline con datos reales se debe evaluar dónde almacenarlos y si pueden divulgarse; el nombre de la carpeta no implica autorización para publicarlos.
+**Segregación:** el pipeline genera su salida en `data/processed/`, excluida de Git por `.gitignore`. La aplicación pública, por separado, consume `data/public/registro_consolidado.csv`, que contiene exclusivamente datos sintéticos. No copie salidas reales a `data/public/`.
 
 ### 3. Verificar el CSV resultante
 
@@ -162,7 +163,7 @@ El código elimina campos específicos de nombres y correos antes de escribir el
 - La validación actual detecta ciertos nombres de columnas y patrones, pero no constituye una evaluación completa de privacidad.
 - La publicación de código no autoriza por sí sola la distribución de registros institucionales o estudiantiles.
 
-**Situación actual:** el repositorio público incluye `data/public/registro_consolidado.csv` con registros individuales seudonimizados. Antes de considerarlo un conjunto de datos de libre distribución o usarlo en un despliegue público, debe verificarse la autorización institucional y el riesgo de identificación indirecta. Para demostraciones abiertas, es preferible emplear datos sintéticos o un conjunto aprobado expresamente.
+**Situación actual (octubre de 2026):** `data/public/registro_consolidado.csv` contiene **2.400 registros totalmente sintéticos**. El dashboard público funciona exclusivamente como demostración: sus cifras no reflejan actividad real del LEA. El CSV real dejó de estar en la versión actual del repositorio, pero las versiones anteriores pueden seguir accesibles mediante el historial de Git y copias externas.
 
 Cambiar este README **no retira los datos ya publicados**, ni del historial de Git ni de otros despliegues o copias.
 
