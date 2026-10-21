@@ -10,7 +10,7 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 SRC_DIR = BASE_DIR / 'src'
 sys.path.append(str(SRC_DIR))
-OUTPUT_FILE = BASE_DIR / 'data' / 'public' / 'registro_consolidado.csv'
+OUTPUT_FILE = BASE_DIR / 'data' / 'processed' / 'registro_consolidado.csv'
 
 # --- IMPORTACIONES MODULARES ---
 from ingestion.load_data import load_excels_from_folder
