@@ -1,261 +1,185 @@
 # Registro LEA
-### Pipeline ETL y Analítica de Monitorías — Laboratorio de Economía Aplicada
 
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Pandas](https://img.shields.io/badge/Pandas-2.0%2B-150458.svg)](https://pandas.pydata.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B.svg)](https://streamlit.io/)
-[![Estado](https://img.shields.io/badge/Estado-En%20producción-brightgreen.svg)]()
+**Consolidación de registros de asistencia y análisis de uso del Laboratorio de Economía Aplicada (LEA)**  
+Pontificia Universidad Javeriana Cali · Proyecto aplicado (2026)
 
+## Descripción
 
----
+El LEA registra la participación de estudiantes en monitorías y otras actividades mediante formularios de Microsoft Forms. Los archivos Excel exportados corresponden a diferentes semestres y presentan variaciones en los nombres de programas, cursos, actividades y personal responsable.
 
-## Contexto y problema
+El proyecto **lee y une los Excel semestrales**, aplica reglas de limpieza y homologación, crea identificadores seudonimizados y genera un CSV consolidado que puede consultarse mediante una aplicación en Streamlit.
 
-El Laboratorio de Economía Aplicada (LEA) de la Javeriana Cali registra la asistencia y participación de estudiantes en sus monitorías a través de Microsoft Forms. Al exportar los datos, los archivos `.xlsx` presentan inconsistencias sistemáticas: errores ortográficos en nombres de carreras, variaciones tipográficas entre cursos, y duplicados de identidad generados por registros con correos distintos o nombres escritos de forma diferente.
+El objetivo es facilitar el análisis histórico de los servicios del laboratorio. **No reemplaza Microsoft Forms ni realiza el registro de asistencia en tiempo real.**
 
-Antes de este proyecto, la limpieza se hacía manualmente cada semestre. Este pipeline la automatiza por completo.
+## Funcionalidades verificadas
 
----
+| Componente | Función |
+| --- | --- |
+| Ingesta | Lee los archivos `.xlsx` de `data/raw/`, extrae el año a partir del nombre de cada archivo y concatena sus filas. |
+| Limpieza | Normaliza encabezados, fechas y categorías de carrera, curso, actividad, semestre y personal responsable. |
+| Identificadores | Genera IDs seudonimizados de estudiantes, profesores y monitores, y elimina determinadas columnas identificadoras antes de exportar. |
+| Consolidación | Produce `data/public/registro_consolidado.csv` con registros de distintos periodos académicos. |
+| Validación | Ejecuta comprobaciones de esquema, valores, coherencia temporal y ausencia de algunas columnas sensibles o cadenas con formato de correo. |
+| Aplicación | Permite explorar indicadores y distribuciones de asistencia en Streamlit y Plotly. |
 
-## Impacto
+La descarga desde Microsoft Forms **es manual**. Una vez que se depositan los Excel en la carpeta local, Python ejecuta la transformación y consolidación. La publicación o actualización del tablero no forma parte de un flujo automatizado de extremo a extremo.
 
-| Antes | Después |
-|---|---|
-| Limpieza manual de datos cada semestre | Pipeline automatizado: ejecutar `main.py` |
-| PII expuesta en el dataset de análisis | 0% de PII — pseudonimización SHA-256 irreversible |
-| Sin trazabilidad de errores | Log de auditoría con todos los valores huérfanos detectados |
-| Sin visibilidad consolidada histórica | Dashboard interactivo con datos de todos los semestres unificados |
+Los identificadores de estudiante son útiles para explorar usuarios distintos, pero **no demuestran una correspondencia perfecta entre una persona y un único identificador**: diferentes correos o variantes de nombre pueden fragmentar su historial.
 
-
----
-
-## Arquitectura del sistema
+## Flujo de datos
 
 ```mermaid
-graph TD
-    A[(Forms / Excel Raw<br/>.xlsx por semestre)] -->|Ingesta automática| B(load_data.py)
-    B --> C{Transformación}
-    C --> D[Normalización snake_case<br/>+ limpieza de texto]
-    D --> E[Mapeo por dominio<br/>Carrera · Curso · Semestre · Staff]
-    E -->|Jerarquía de Confianza| F(anonymization.py<br/>Hashing SHA-256)
-    F --> G[(data/public<br/>registro_consolidado.csv)]
-    G -->|Validación mínima| I(accuracy.py)
-    G -->|Lectura en caché| H[Streamlit Dashboard<br/>streamlit_app.py · app.py · Plotly]
+flowchart TD
+    A[Microsoft Forms] -->|Descarga manual| B[Excel de cada semestre]
+    B --> C["data/raw/"]
+    C --> D[Lectura y unión de archivos]
+    D --> E[Normalización de fechas y categorías]
+    E --> F[Seudonimización y eliminación de algunas columnas]
+    F --> G[Validación previa a la exportación]
+    G --> H["data/public/registro_consolidado.csv"]
+    H --> I[Comprobaciones adicionales: accuracy.py]
+    H --> J[Aplicación Streamlit y Plotly]
 ```
-
-**Etapas del pipeline:**
-
-1. **Ingesta automática (`load_data.py`)** — Escanea el directorio, extrae metadatos de año, concatena múltiples archivos `.xlsx` y estandariza cabeceras a `snake_case`.
-2. **Transformación por dominio** — Normalización de texto (tildes, caracteres especiales, ruido estructural) y aplicación de diccionarios de homologación con complejidad O(1) para las variables *Carrera*, *Curso*, *Semestre* y *Staff*.
-3. **Gobernanza y anonimización (`anonymization.py`)** — Implementa una *Jerarquía de Confianza* de 3 niveles para resolución de entidades únicas, seguida de pseudonimización irreversible con SHA-256 sobre toda la PII.
-4. **Carga y auditoría** — Exportación del Data Mart consolidado. Los valores no mapeados se registran en `logs.log` sin detener la ejecución.
-
----
-
-## Usuarios
-
-| Usuario | Rol en el sistema |
-|---|---|
-| **Coordinador del LEA** | Consumidor del dashboard |
-| **Monitores y Staff** | Fuente de datos — reporte de actividades vía Microsoft Forms |
-
----
 
 ## Estructura del repositorio
 
 ```text
 registro_LEA/
+├── .streamlit/
+│   └── config.toml
 ├── data/
-│   ├── raw/                    <- Excluido: archivos Excel con PII
-│   └── public/                 <- Versionado: salida anonimizada para Streamlit Cloud
-│       └── registro_consolidado.csv
+│   ├── raw/                          # Excel de origen; excluido de Git
+│   └── public/
+│       └── registro_consolidado.csv  # Datos que consume la aplicación
 ├── src/
 │   ├── ingestion/
-│   │   └── load_data.py        <- Carga, concatenación y estandarización de cabeceras
+│   │   └── load_data.py
 │   ├── cleaning/
-│   │   ├── anonymization.py    <- Jerarquía de Confianza + Hashing SHA-256
-│   │   ├── clean_staff.py
+│   │   ├── anonymization.py
+│   │   ├── clean_date.py
 │   │   ├── clean_carrera.py
-│   │   ├── clean_semestre.py
 │   │   ├── clean_curso.py
+│   │   ├── clean_semestre.py
 │   │   ├── clean_actividades.py
-│   │   └── text_utils.py
-│   ├── mappings/               <- Diccionarios de homologación por dominio
-│   │   ├── staff.py            <- (excluido: .gitignore — contiene nombres reales)
-│   │   ├── carrera.py
-│   │   ├── curso.py
-│   │   └── actividades.py
+│   │   └── clean_staff.py
+│   ├── mappings/                     # Diccionarios de homologación
 │   ├── pipeline/
-│   │   ├── main.py             <- Orquestador principal del proceso ETL
-│   │   └── accuracy.py         <- Validaciones mínimas del output final
+│   │   ├── main.py                   # Orquestador
+│   │   └── accuracy.py               # Comprobaciones del resultado
 │   └── analysis/
-│       └── app.py              <- Aplicación Streamlit + Plotly Express
-├── logs.log                    <- Excluido: auditoría local de valores huérfanos
-├── streamlit_app.py            <- Entrypoint recomendado para Streamlit Community Cloud
+│       └── app.py                    # Tablero
+├── streamlit_app.py
 ├── requirements.txt
 └── README.md
 ```
 
-> **Nota:** Los archivos en `data/raw/` y `mappings/staff.py` no se versionan por privacidad. El dashboard desplegado usa `data/public/registro_consolidado.csv`, que se genera anonimizado desde el pipeline.
+Algunos insumos no se versionan, entre ellos `data/raw/` y `src/mappings/staff.py`. **El procesamiento completo no puede reproducirse desde una copia recién clonada sin los archivos originales y las reglas locales necesarias**, cuya utilización debe estar autorizada.
 
----
+## Tecnologías
 
-## Esquema de datos
+- **Python y pandas:** lectura, limpieza, transformación y consolidación.
+- **`hashlib` / SHA-256:** construcción de identificadores seudonimizados.
+- **Streamlit y Plotly:** interfaz y gráficos interactivos.
+- **Git y GitHub:** control de versiones del código.
 
-### Input — Archivo crudo de registro (`.xlsx`)
+## Ejecución local
 
-Registros originales de asistencia exportados desde Microsoft Forms. Estado: crudo (raw), sin estandarizar.
+### Requisitos
 
-| Columna | Tipo | Descripción |
-| :--- | :--- | :--- |
-| `No.` | INTEGER | Número de fila en el archivo de origen. |
-| `Fecha` | STRING | Mes de la actividad (ej. "Febrero"). |
-| `Nombres y apellidos` | STRING | Nombre completo del estudiante. Usado en la Jerarquía de Confianza como fallback. |
-| `Carrera` | STRING | Programa académico. Requiere normalización — presenta errores tipográficos frecuentes. |
-| `Semestre` | INTEGER | Nivel académico del estudiante (ej. 3, 5, 6). |
-| `Monitor encargado (si aplica)` | STRING | Monitor que acompañó la sesión. |
-| `Profesor Encargado (si aplica)` | STRING | Profesor titular o responsable del área. |
-| `Curso` | STRING | Asignatura en la que se enmarca la sesión. |
-| `Actividad (...)` | STRING | Tema específico de la sesión (ej. "Capacitación R", "Simulador"). |
-| `Correo Institucional` | STRING | Email del estudiante. Fuente primaria de identidad en la Jerarquía de Confianza. |
+- Python 3.10 o superior.
+- Archivos `.xlsx` por semestre en `data/raw/`. Sus nombres deben contener un año con cuatro dígitos (por ejemplo, 2025).
+- Archivos locales de homologación requeridos por el código, cuando no estén publicados.
+- Autorización para tratar los datos de origen.
 
-### Output — `data/public/registro_consolidado.csv`
-
-- **0% de PII** — nombres y correos eliminados post-hashing
-- Variables categóricas estandarizadas y legibles
-- Identificadores únicos trazables mediante SHA-256
-- Salida versionable para Streamlit Community Cloud
-
----
-
-## Gobernanza y privacidad de datos
-
-El módulo `anonymization.py` implementa una **Jerarquía de Confianza de 3 niveles** para resolver la identidad única de cada estudiante antes del hashing:
-
-1. **Email institucional** — máxima confianza (dominio universitario verificable)
-2. **Email personal** — confianza media
-3. **Nombre completo** — fallback de último recurso (mayor riesgo de variaciones tipográficas)
-
-Una vez resuelta la identidad, se aplica **SHA-256** para generar un identificador alfanumérico irreversible. El dataset final no contiene ningún campo de PII.
-
----
-
-## Stack tecnológico
-
-| Capa | Tecnología |
-|---|---|
-| Lenguaje core | Python 3.10+ |
-| Procesamiento de datos | Pandas 2.0+ |
-| Seguridad y hashing | Hashlib (librería estándar de Python) |
-| Dashboard e interfaz | Streamlit + Plotly Express |
-| Control de versiones | Git / GitHub |
-
----
-
-## Instrucciones de ejecución
-
-### Prerrequisitos
-
-- Python 3.10 o superior
-- Archivos `.xlsx` por semestre ubicados en `data/raw/`
-- `mappings/staff.py` con el diccionario de normalización del staff (no versionado)
-
-### Paso 1 — Pipeline ETL
+### 1. Preparar el entorno
 
 ```bash
-# Clonar el repositorio
-git clone https://github.com/JuanEstiven-Data/registro_LEA.git
+git clone https://github.com/sjestiven/registro_LEA.git
 cd registro_LEA
-
-# Crear y activar entorno virtual
 python -m venv .venv
-# source .venv/bin/activate      # Mac / Linux
-# .venv\Scripts\activate         # Windows
+```
 
-# Instalar dependencias
-pip install -r requirements.txt
+Activar el entorno virtual en Windows (PowerShell):
 
-# Ejecutar el orquestador
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+O en macOS/Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+Instalar dependencias:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### 2. Procesar los Excel
+
+```bash
 python src/pipeline/main.py
 ```
 
-Output generado: `data/public/registro_consolidado.csv`
+El programa lee los archivos, consolida los registros y genera o actualiza `data/public/registro_consolidado.csv`. También puede crear `logs.log` con información sobre la ejecución y valores que requieren revisión.
 
-> Revisar `logs.log` para auditar valores huérfanos detectados durante el mapeo. Los valores no mapeados no detienen la ejecución — se registran para actualización manual de los diccionarios.
+**Advertencia:** el destino actual es la carpeta `data/public/`. Antes de ejecutar el pipeline con datos reales se debe evaluar dónde almacenarlos y si pueden divulgarse; el nombre de la carpeta no implica autorización para publicarlos.
 
-### Paso 2 — Validación mínima
+### 3. Verificar el CSV resultante
+
+Para validar el archivo existente **sin ejecutar de nuevo el pipeline**:
+
+```bash
+python src/pipeline/accuracy.py --skip-pipeline
+```
+
+Para ejecutar el pipeline y después las comprobaciones:
 
 ```bash
 python src/pipeline/accuracy.py
 ```
 
-Este comando ejecuta el pipeline y valida esquema, privacidad, fechas, ciclos y preparación básica para análisis cruzado.
+El script comprueba columnas requeridas, formato de identificadores, algunas señales visibles de información personal, completitud, consistencia de fechas y cruces básicos de variables. **No certifica anonimato, ausencia de reidentificación ni calidad integral del conjunto de datos.**
 
-### Paso 3 — Dashboard
+### 4. Abrir la aplicación
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-La aplicación se abre en `http://localhost:8501`. También puede ejecutarse directamente con `streamlit run src/analysis/app.py`.
+La aplicación suele abrirse en `http://localhost:8501` y lee el CSV consolidado; no se conecta a Microsoft Forms.
 
-### Paso 4 — Streamlit Community Cloud
+## Privacidad y publicación
 
-En Streamlit Community Cloud, usar:
+El código elimina campos específicos de nombres y correos antes de escribir el CSV. Para generar el identificador de un estudiante selecciona, según disponibilidad, correo institucional, otro correo o nombre completo. Después calcula SHA-256 y utiliza **12 caracteres hexadecimales**; los identificadores de profesores y monitores también proceden de hashes truncados.
 
-- Repository: `JuanEstiven-Data/registro_LEA`
-- Branch: `main`
-- Main file path: `streamlit_app.py`
-- Python dependencies: `requirements.txt`
+**Este mecanismo es seudonimización, no anonimización garantizada.**
 
-El despliegue no necesita `data/raw/` ni `mappings/staff.py`; solo consume el CSV público anonimizado.
+- SHA-256 se utiliza sin una sal secreta, y los identificadores se truncan. Esto no elimina el riesgo de reidentificación ni asegura ausencia de colisiones.
+- La combinación de periodo, carrera, curso, actividad y otros atributos puede conservar riesgo de identificación indirecta.
+- La validación actual detecta ciertos nombres de columnas y patrones, pero no constituye una evaluación completa de privacidad.
+- La publicación de código no autoriza por sí sola la distribución de registros institucionales o estudiantiles.
 
----
+**Situación actual:** el repositorio público incluye `data/public/registro_consolidado.csv` con registros individuales seudonimizados. Antes de considerarlo un conjunto de datos de libre distribución o usarlo en un despliegue público, debe verificarse la autorización institucional y el riesgo de identificación indirecta. Para demostraciones abiertas, es preferible emplear datos sintéticos o un conjunto aprobado expresamente.
 
-## Alcance
+Cambiar este README **no retira los datos ya publicados**, ni del historial de Git ni de otros despliegues o copias.
 
-**Dentro del alcance:**
-- Procesamiento local de archivos `.xlsx` exportados manualmente desde Microsoft Forms
-- Generación de un Data Mart unificado en `.csv` (sin límite de filas, agnóstico de plataforma)
-- Pseudonimización completa: 0% de PII en el dataset final
-- Dashboard interactivo con filtros dinámicos y gráficos por semestre, carrera, curso y actividad
-- Despliegue del dashboard en Streamlit Community Cloud usando el dataset público anonimizado
+## Limitaciones y trabajo futuro
 
-**Fuera del alcance:**
-- Conexión automatizada vía API a Microsoft Forms o Microsoft Graph
-- Modificación del formulario original de recolección
+- La extracción de Microsoft Forms no está conectada automáticamente mediante API.
+- Las reglas de homologación dependen del formato esperado y de diccionarios que pueden requerir mantenimiento manual.
+- La conciliación de identidades puede producir IDs diferentes para una misma persona.
+- La aplicación depende de un CSV existente; no ejecuta el procesamiento al abrirse.
+- Se requieren pruebas unitarias y un conjunto de datos sintéticos para demostrar reproducibilidad sin acceso a datos reales.
+- Es necesario definir una estrategia autorizada de acceso, publicación y retención de información institucional.
 
----
+## Participación y contexto
 
-## Supuestos y limitaciones
+Proyecto aplicado al seguimiento de servicios del **Laboratorio de Economía Aplicada de la Pontificia Universidad Javeriana Cali**.
 
-| Riesgo | Impacto | Mitigación |
-|---|---|---|
-| Cambio en el nombre de columnas del formulario entre semestres | Alto | Estandarización a `snake_case` + excepciones `try/except` con mensaje de error descriptivo |
-| Nuevos programas académicos o cursos no mapeados | Medio | El pipeline no se detiene — registra los valores huérfanos en `logs.log` para actualización manual |
-| Estudiante con correos distintos y variaciones extremas del nombre | Bajo | La Jerarquía de Confianza prioriza el email institucional; casos extremos pueden generar IDs duplicados (falsos negativos) |
+**Juan E. Silva** · Estudiante de Economía y monitor LEA. Participación en la definición de necesidades, revisión funcional y desarrollo de la herramienta con asistencia de IA en la implementación de Python.
 
-**Supuestos base:**
-- Las columnas obligatorias del formulario no cambian de nombre entre semestres
-- Los archivos `.xlsx` se ubican en `data/raw/` con el formato esperado antes de ejecutar
-
----
-
-## Mejoras futuras
-
-- [x] Despliegue preparado para Streamlit Community Cloud con `streamlit_app.py` y `data/public/`
-- [ ] Integración con la API de Microsoft Graph para eliminar la descarga manual de Excel
-- [x] Validaciones mínimas del pipeline con `src/pipeline/accuracy.py`
-- [ ] Pruebas unitarias con `pytest` para funciones críticas de limpieza
-
----
-
-## Autor
-
-**Juan E. Silva** — Analista BI · Monitor de Investigación LEA · Pontificia Universidad Javeriana  
-[LinkedIn](https://linkedin.com/in/juanestiven-data) · [GitHub](https://github.com/JuanEstiven-Data)
-
----
-
-*Proyecto desarrollado para el Laboratorio de Economía Aplicada (LEA) — Pontificia Universidad Javeriana, Cali. Uso interno institucional.*
-
+- [GitHub](https://github.com/sjestiven)
+- [LinkedIn](https://www.linkedin.com/in/sanchez-jestiven)
